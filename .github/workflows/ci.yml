@@ -247,61 +247,181 @@ jobs:
   create-release:
     needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download Kotlin artifacts
+        if: needs.build-kotlin.result == 'success'
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: kotlin-library
+          path: artifacts/kotlin-library
+        continue-on-error: true
 
-      - name: Prepare release assets
+      - name: Download CLI artifacts
+        if: needs.build-cli.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: gbl-cli-tool
+          path: artifacts/gbl-cli-tool
+        continue-on-error: true
+
+      - name: Download Java artifacts
+        if: needs.build-java.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: java-library
+          path: artifacts/java-library
+        continue-on-error: true
+
+      - name: Download Python artifacts
+        if: needs.build-python.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: python-library
+          path: artifacts/python-library
+        continue-on-error: true
+
+      - name: Download JavaScript artifacts
+        if: needs.build-javascript.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: javascript-library
+          path: artifacts/javascript-library
+        continue-on-error: true
+
+      - name: Download Swift artifacts
+        if: needs.build-swift.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: swift-library
+          path: artifacts/swift-library
+        continue-on-error: true
+
+      - name: Prepare release assets and generate description
         run: |
           mkdir -p release-assets
           
-          # Copy and rename artifacts
-          find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library.jar \;
-          find artifacts -name "*.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.jar \;
-          find artifacts -name "*.tar.gz" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.tar.gz \;
-          find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library.jar \;
-          find artifacts -name "*.tar.gz" -path "*/python-library/*" -exec cp {} release-assets/gbl-python-library.tar.gz \;
-          find artifacts -name "*.tar.gz" -path "*/javascript-library/*" -exec cp {} release-assets/gbl-javascript-library.tar.gz \;
-          find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library.tar.gz \;
+          # Initialize release description
+          echo "# GBL-Ninja Release ${{ github.ref_name }}" > release-description.md
+          echo "" >> release-description.md
+          echo "Multi-language toolkit for working with GBL (Gecko Bootloader) files." >> release-description.md
+          echo "" >> release-description.md
+          echo "## Build Status" >> release-description.md
+          echo "" >> release-description.md
           
-          # Create combined archive
-          tar -czf release-assets/gbl-ninja-complete-${GITHUB_REF_NAME}.tar.gz -C artifacts .
+          # Check each component and copy artifacts
+          AVAILABLE_DOWNLOADS=""
+          
+          # Kotlin Library
+          if [ "${{ needs.build-kotlin.result }}" = "success" ] && find artifacts -name "*.jar" -path "*/kotlin-library/*" | head -1 | xargs test -f; then
+            find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library.jar \;
+            echo "- ✅ **Kotlin Library**: Built successfully" >> release-description.md
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Kotlin Library**: \`gbl-kotlin-library.jar\`\n"
+          else
+            echo "- ❌ **Kotlin Library**: Build failed" >> release-description.md
+          fi
+          
+          # CLI Tool
+          if [ "${{ needs.build-cli.result }}" = "success" ]; then
+            find artifacts -name "*.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.jar \; 2>/dev/null || true
+            find artifacts -name "*.tar.gz" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.tar.gz \; 2>/dev/null || true
+            if [ -f "release-assets/gbl-cli-tool.jar" ] || [ -f "release-assets/gbl-cli-tool.tar.gz" ]; then
+              echo "- ✅ **CLI Tool**: Built successfully" >> release-description.md
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **CLI Tool**: \`gbl-cli-tool.jar\` / \`gbl-cli-tool.tar.gz\`\n"
+            else
+              echo "- ⚠️ **CLI Tool**: Build completed but no artifacts found" >> release-description.md
+            fi
+          else
+            echo "- ❌ **CLI Tool**: Build failed" >> release-description.md
+          fi
+          
+          # Java Library
+          if [ "${{ needs.build-java.result }}" = "success" ] && find artifacts -name "*.jar" -path "*/java-library/*" | head -1 | xargs test -f; then
+            find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library.jar \;
+            echo "- ✅ **Java Library**: Built successfully" >> release-description.md
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Java Library**: \`gbl-java-library.jar\`\n"
+          else
+            echo "- ❌ **Java Library**: Build failed" >> release-description.md
+          fi
+          
+          # Python Library
+          if [ "${{ needs.build-python.result }}" = "success" ]; then
+            find artifacts -name "*" -path "*/python-library/*" -exec cp {} release-assets/ \; 2>/dev/null || true
+            if [ -n "$(find release-assets -name "*python*" 2>/dev/null)" ]; then
+              echo "- ✅ **Python Library**: Built successfully" >> release-description.md
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Python Library**: \`gbl-python-library.*\`\n"
+            else
+              echo "- ⚠️ **Python Library**: Build completed but no artifacts found" >> release-description.md
+            fi
+          else
+            echo "- ❌ **Python Library**: Build failed" >> release-description.md
+          fi
+          
+          # JavaScript Library
+          if [ "${{ needs.build-javascript.result }}" = "success" ]; then
+            find artifacts -name "*" -path "*/javascript-library/*" -exec cp {} release-assets/ \; 2>/dev/null || true
+            if [ -n "$(find release-assets -name "*javascript*" -o -name "*.tgz" 2>/dev/null)" ]; then
+              echo "- ✅ **JavaScript Library**: Built successfully" >> release-description.md
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **JavaScript Library**: \`gbl-javascript-library.*\`\n"
+            else
+              echo "- ⚠️ **JavaScript Library**: Build completed but no artifacts found" >> release-description.md
+            fi
+          else
+            echo "- ❌ **JavaScript Library**: Build failed" >> release-description.md
+          fi
+          
+          # Swift Library
+          if [ "${{ needs.build-swift.result }}" = "success" ] && find artifacts -name "*.tar.gz" -path "*/swift-library/*" | head -1 | xargs test -f; then
+            find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library.tar.gz \;
+            echo "- ✅ **Swift Library**: Built successfully" >> release-description.md
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Swift Library**: \`gbl-swift-library.tar.gz\`\n"
+          else
+            echo "- ❌ **Swift Library**: Build failed" >> release-description.md
+          fi
+          
+          # Create combined archive if we have any artifacts
+          if [ -n "$(find release-assets -type f 2>/dev/null)" ]; then
+            tar -czf release-assets/gbl-ninja-complete-${{ github.ref_name }}.tar.gz -C artifacts . 2>/dev/null || echo "No artifacts to combine"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Complete Package**: \`gbl-ninja-complete-${{ github.ref_name }}.tar.gz\`\n"
+          fi
+          
+          # Add downloads section
+          echo "" >> release-description.md
+          if [ -n "$AVAILABLE_DOWNLOADS" ]; then
+            echo "## Available Downloads" >> release-description.md
+            echo "" >> release-description.md
+            echo -e "$AVAILABLE_DOWNLOADS" >> release-description.md
+          else
+            echo "## Downloads" >> release-description.md
+            echo "" >> release-description.md
+            echo "⚠️ No artifacts were successfully built for this release." >> release-description.md
+          fi
+          
+          echo "" >> release-description.md
+          echo "## Usage" >> release-description.md
+          echo "" >> release-description.md
+          echo "See individual library documentation in the respective directories." >> release-description.md
+          
+          # Count available files
+          ARTIFACT_COUNT=$(find release-assets -type f 2>/dev/null | wc -l)
+          echo "Found $ARTIFACT_COUNT release artifacts"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: release-assets/*
-          body: |
-            # GBL-Ninja Release ${{ github.ref_name }}
-            
-            Multi-language toolkit for working with GBL (Gecko Bootloader) files.
-            
-            ## Downloads
-            
-            - **Kotlin Library**: `gbl-kotlin-library.jar`
-            - **Java Library**: `gbl-java-library.jar`
-            - **CLI Tool**: `gbl-cli-tool.jar` / `gbl-cli-tool.tar.gz`
-            - **Python Library**: `gbl-python-library.tar.gz`
-            - **JavaScript Library**: `gbl-javascript-library.tar.gz`
-            - **Swift Library**: `gbl-swift-library.tar.gz`
-            - **Complete Package**: `gbl-ninja-complete-${{ github.ref_name }}.tar.gz`
-            
-            ## Usage
-            
-            See individual library documentation in the respective directories.
+          body_path: release-description.md
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   summary:
-    needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift]
+    needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift, create-release]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -318,4 +438,22 @@ jobs:
           echo "| JavaScript Library | ${{ needs.build-javascript.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Swift Library | ${{ needs.build-swift.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Artifacts are available for download for 90 days." >> $GITHUB_STEP_SUMMARY
+          
+          # Release status
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "| Release | ${{ needs.create-release.result == 'success' && '✅ Created' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          
+            # Count successful builds
+            SUCCESS_COUNT=0
+            [ "${{ needs.build-kotlin.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            [ "${{ needs.build-cli.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            [ "${{ needs.build-java.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            [ "${{ needs.build-python.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            [ "${{ needs.build-javascript.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            [ "${{ needs.build-swift.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+          
+            echo "**Release Summary**: $SUCCESS_COUNT out of 6 components built successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Artifacts are available for download for 90 days." >> $GITHUB_STEP_SUMMARY
+          fi
