@@ -1,213 +1,179 @@
----
+# GBL-Ninja
 
-# 🔍 Gecko Bootloader Parser SDK
+**GBL-Ninja** is a comprehensive toolkit for working with GBL (Gecko Bootloader) files.
 
-**Gecko Bootloader Parser SDK** is a Kotlin library for parsing and creating files in the GBL (Gecko Bootloader) format. It allows you to parse, analyze, modify, and generate GBL files used for firmware updates on Silicon Labs-based devices.
+## Project Structure
 
----
+This repository contains:
 
-## 📝 Description
+- **[kotlin-library/](kotlin-library/)** - Core Kotlin library for parsing and creating GBL files
+- **[python-library/](python-library/)** - Python implementation of the GBL library
+- **[javascript-library/](javascript-library/)** - JavaScript implementation with web interface
+- **[gbl-tool-cli/](gbl-tool-cli/)** - Command-line tool for GBL file manipulation
+- **[swift-library/](swift-library/)** - Swift port for Apple platform
 
-**GBL (Gecko Bootloader)** is a binary file format used for firmware updates on Silicon Labs devices. This library provides a convenient API to work with such files, enabling:
+## Language Support
 
-* Parsing GBL files into structured objects
-* Modifying tag contents
-* Creating new GBL files
-* Adding and removing tags
+Choose your preferred implementation:
 
----
+### Kotlin Library (Original)
+Full-featured implementation with advanced container management and JSON serialization.
 
-## 🛠️ Installation
+**Gradle (Kotlin DSL)**:
+```kotlin
+repositories {
+    maven("https://jitpack.io")
+}
 
-Add the dependency to your `build.gradle`:
-
-```groovy
-implementation 'com.yourpackage:gbl-parser:1.0.0'
+dependencies {
+    implementation("com.github.VladimirOnix:gbl-ninja:v3")
+}
 ```
 
-Or, if you are using Maven:
+### Python Library
+Python port of the Kotlin library with identical functionality.
 
-```xml
-<dependency>
-    <groupId>com.yourpackage</groupId>
-    <artifactId>gbl-parser</artifactId>
-    <version>1.0.0</version>
-</dependency>
+```bash
+pip install gbl-ninja-python
 ```
 
----
+### JavaScript Library
+Browser and Node.js compatible implementation with interactive web interface.
 
-## 🚀 Usage
+```html
+<script src="gbl-library.js"></script>
+```
 
-### Parsing a GBL File
+### Swift Library
+Swift port with basic support for parsing, creating, and modifying GBL files. SwiftPM-compatible.
+
+```swift
+.package(url: "https://github.com/VladimirOnix/gbl-ninja", branch: "main")
+```
+
+## Quick Start
+
+### Kotlin Example
 
 ```kotlin
-import parser.GblParser
+import Gbl
+import results.ParseResult
 
-// Create a parser instance
-val gblParser = GblParser()
+// Parse existing GBL file
+val parser = Gbl()
+val result = parser.parseByteArray(gblFileBytes)
 
-// Read and parse the file
-val byteArray = readFileAsByteArray("firmware.gbl")
-val parseResult = gblParser.parseHexEncodedFile(byteArray)
-
-// Handle the result
-when (parseResult) {
+when (result) {
     is ParseResult.Success -> {
-        val tags = parseResult.tags
-        tags.forEach { tag ->
-            println(tag)
-        }
+        println("Parsed ${result.resultList.size} tags")
     }
     is ParseResult.Fatal -> {
-        println("Error parsing file")
+        println("Parse error: ${result.error}")
     }
 }
+
+// Create new GBL file
+val builder = Gbl.GblBuilder.create()
+    .application(type = 32U, version = 0x10000U)
+    .prog(flashStartAddress = 0x1000U, data = firmwareData)
+
+val gblBytes = builder.buildToByteArray()
 ```
 
-### Creating a New GBL File
+### Python Example
 
-```kotlin
-import parser.data.encode.encodeTags
-import parser.data.encode.encodeTagsWithEndTag
-import parser.data.tag.TagInterface
+```python
+from gbl import Gbl
+from results.parse_result import ParseResult
 
-// Assume you have a list of tags (either parsed or manually created)
-val tags: List<TagInterface> = ...
+# Parse existing GBL file
+gbl_parser = Gbl()
+result = gbl_parser.parse_byte_array(gbl_data)
 
-// Option 1: Simple tag encoding
-val gblBytes = encodeTags(tags)
+if isinstance(result, ParseResult.Success):
+    print(f"Successfully parsed {len(result.result_list)} tags")
+else:
+    print(f"Parse failed: {result.error}")
 
-// Option 2: Encoding with auto END tag and CRC calculation
-val gblBytesWithEnd = encodeTagsWithEndTag(tags)
+# Create new GBL file
+builder = Gbl().GblBuilder.create()
+builder.application(type_val=32, version=0x10000)
+builder.prog(flash_start_address=0x1000, data=firmware_data)
 
-// Write to file
-writeByteArrayToFile(gblBytesWithEnd, "new_firmware.gbl")
+gbl_bytes = builder.build_to_byte_array()
 ```
 
-### Modifying an Existing GBL File
+### JavaScript Example
 
-```kotlin
-val parseResult = gblParser.parseHexEncodedFile(inputBytes)
-if (parseResult is ParseResult.Success) {
-    val tags = parseResult.tags.toMutableList()
+```javascript
+// Parse existing GBL file
+const gbl = new Gbl();
+const parseResult = gbl.parseByteArray(gblFileBytes);
 
-    val bootloaderTagIndex = tags.indexOfFirst { it is GblBootloader }
-    if (bootloaderTagIndex != -1) {
-        val bootloaderTag = tags[bootloaderTagIndex] as GblBootloader
-
-        // Modify the version
-        val modifiedTag = bootloaderTag.copy(bootloaderVersion = 0x20000u)
-        tags[bootloaderTagIndex] = modifiedTag
-    }
-
-    val modifiedGblBytes = encodeTagsWithEndTag(tags)
-    writeByteArrayToFile(modifiedGblBytes, "modified_firmware.gbl")
-}
-```
-
----
-
-## 📚 Supported Tag Types
-
-| Tag Type    | Description                      |
-| ----------- | -------------------------------- |
-| HEADER\_V3  | GBL file header (version 3)      |
-| BOOTLOADER  | Bootloader information           |
-| APPLICATION | Application data                 |
-| METADATA    | File metadata                    |
-| PROG        | Raw programming data             |
-| PROG\_LZ4   | LZ4-compressed programming data  |
-| PROG\_LZMA  | LZMA-compressed programming data |
-| ERASEPROG   | Memory erase command             |
-| SE\_UPGRADE | SE upgrade information           |
-| END         | Final tag with CRC               |
-
----
-
-## 🔍 GBL File Structure
-
-Each GBL file consists of a sequence of tags, where each tag has the following structure:
-
-* **Tag ID** (4 bytes, `uint32`)
-* **Data Length** (4 bytes, `uint32`)
-* **Tag Data** (byte array of specified length)
-
-The final tag in the file must always be an **END** tag, which contains a CRC for verifying file integrity.
-
----
-
-## 🧩 API & Interfaces
-
-### Core Interfaces and Classes
-
-```kotlin
-// Main interface for all tags
-interface TagInterface {
-    val tagHeader: TagHeader
-    val tagType: GblType
-    val tagData: ByteArray
+if (parseResult.type === 'Success') {
+    console.log(`Parsed ${parseResult.resultList.length} tags`);
+} else {
+    console.error(`Parse error: ${parseResult.error}`);
 }
 
-// Tag header structure
-data class TagHeader(
-    val id: UInt,
-    val length: UInt
-)
+// Create new GBL file
+const builder = Gbl.GblBuilder.create()
+    .application(32, 0x10000, 0, 54)
+    .prog(0x1000, firmwareData);
 
-// Parsing result
-sealed class ParseResult {
-    data class Success(val tags: List<TagInterface>) : ParseResult()
-    object Fatal : ParseResult()
+const gblBytes = builder.buildToByteArray();
+```
+
+### Swift Example
+
+```Swift
+let gbl = Gbl()
+let data: Data = ... // Load GBL file
+let result = gbl.parseByteArray(data)
+
+switch result {
+case .success(let tags):
+    print("Parsed \(tags.count) tags")
+case .fatal(let error):
+    print("Error: \(error?.localizedDescription ?? "unknown")")
 }
+
+let builder = Gbl.GblBuilder.create()
+    .application(type: 32, version: 0x10000)
+    .prog(flashStartAddress: 0x1000, data: firmwareData)
+
+let newFile = builder.buildToByteArray()
 ```
 
-### Byte Utilities
+## Documentation
 
-```kotlin
-// Read values from a byte array in little-endian order
-fun getFromBytes(byteArray: ByteArray, offset: Int = 0, length: Int = 4): ByteBuffer
-```
+- **[Kotlin Library Documentation](kotlin-library/README.md)** - Original Kotlin library
+- **[Python Library Documentation](python-library/README.md)** - Python implementation
+- **[JavaScript Library Documentation](javascript-library/README.md)** - JavaScript implementation with web interface
+- **[CLI Tool Documentation](gbl-tool-cli/README.md)** - Command-line interface
+- **[Swift Library Documentation](swift-library/README.md)** - Swift implementation
 
----
+## About GBL Format
 
-## ⚠️ Limitations & Notes
+GBL (Gecko Bootloader) is a binary file format used for firmware updates on Silicon Labs devices. It consists of tagged data blocks that contain:
 
-* The library uses **Little-Endian** byte order for reading/writing values
-* The CRC is calculated for the entire file and stored in the **END** tag
-* Only **GBL version 3** files are supported
+- Application code and data
+- Bootloader updates
+- Security certificates and signatures
+- Metadata and version information
 
----
+## Features
 
-## 📋 Example: Parse and Print Tag Info
+- **Parse** existing GBL files into structured data
+- **Create** new GBL files from scratch
+- **Modify** existing GBL files
+- **Validate** file integrity with CRC checks
+- **Support** for compression (LZ4, LZMA)
+- **Security** features (ECDSA signatures, encryption)
+- **Multi-language** support (Kotlin, Python, JavaScript)
+- **Web Interface** for interactive GBL file manipulation
+- **Cross-platform** compatibility (JVM, Python, Browser, Node.js)
 
-```kotlin
-val parser = GblParser()
-val result = parser.parseHexEncodedFile(fileBytes)
+## License
 
-if (result is ParseResult.Success) {
-    result.tags.forEach { tag ->
-        when (tag) {
-            is GblHeader -> println("GBL Header: version ${tag.version}, type ${tag.gblType}")
-            is GblBootloader -> println("Bootloader: version ${tag.bootloaderVersion}, address ${tag.address.toString(16)}")
-            is GblApplication -> println("Application: type ${tag.applicationData.type}, version ${tag.applicationData.version}")
-            is GblEnd -> println("END tag: CRC = ${tag.gblCrc.toString(16)}")
-            else -> println("Other tag: ${tag.tagType}")
-        }
-    }
-}
-```
-
----
-
-## 📜 License
-
-This library is released under the **MIT License**.
-
----
-
-## 🤝 Contributions
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
----
+Apache License 2.0
