@@ -1,326 +1,16 @@
-name: Cross-Platform Compatibility
+name: Build and Release
 
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
-  matrix-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        java-version: [17, 21]
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
-        node-version: [16, 18, 20]
-        exclude:
-          # Reduce matrix size for faster execution
-          - os: windows-latest
-            python-version: '3.8'
-          - os: windows-latest
-            node-version: 16
-          - os: macos-latest
-            python-version: '3.8'
-          - os: macos-latest
-            java-version: 21
-        include:
-          # Add specific test combinations
-          - os: ubuntu-20.04
-            java-version: 17
-            python-version: '3.9'
-            node-version: 16
-            special: 'legacy'
-          - os: ubuntu-latest
-            java-version: 21
-            python-version: '3.12'
-            node-version: 20
-            special: 'latest'
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java ${{ matrix.java-version }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: ${{ matrix.java-version }}
-          distribution: 'temurin'
-
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ~/.cache/pip
-            ~/.npm
-          key: ${{ runner.os }}-deps-${{ hashFiles('**/*.gradle*', '**/requirements.txt', '**/package.json') }}
-
-      - name: Install system dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-
-      - name: Install system dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install coreutils
-
-      - name: Make scripts executable
-        if: runner.os != 'Windows'
-        run: |
-          find . -name "gradlew" -exec chmod +x {} \;
-          chmod +x create_release.sh || true
-
-      - name: Test CLI Tool Build
-        run: |
-          echo "🔧 Testing CLI tool on ${{ matrix.os }} with Java ${{ matrix.java-version }}..."
-          cd gbl-tool-cli
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            ./gradlew.bat build --info || echo "CLI build failed"
-          else
-            ./gradlew build --info || echo "CLI build failed"
-          fi
-        shell: bash
-
-      - name: Test Java Library Build
-        run: |
-          echo "☕ Testing Java library on ${{ matrix.os }} with Java ${{ matrix.java-version }}..."
-          cd java-library
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            ./gradlew.bat build test --info || echo "Java build/test failed"
-          else
-            ./gradlew build test --info || echo "Java build/test failed"
-          fi
-        shell: bash
-
-      - name: Test Kotlin Library Build
-        run: |
-          echo "🎯 Testing Kotlin library on ${{ matrix.os }} with Java ${{ matrix.java-version }}..."
-          cd kotlin-library
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            ./gradlew.bat build test --info || echo "Kotlin build/test failed"
-          else
-            ./gradlew build test --info || echo "Kotlin build/test failed"
-          fi
-        shell: bash
-
-      - name: Test Python Library
-        run: |
-          echo "🐍 Testing Python library on ${{ matrix.os }} with Python ${{ matrix.python-version }}..."
-          cd python-library
-          python --version
-          python -c "import sys; print(f'Python executable: {sys.executable}')"
-          
-          if [ -f "gbl.py" ]; then
-            python gbl.py || echo "Python module test failed"
-          fi
-          
-          # Test imports
-          python -c "
-          try:
-              import sys, os
-              sys.path.insert(0, '.')
-              import gbl
-              print('✅ Python import successful')
-          except Exception as e:
-              print(f'❌ Python import failed: {e}')
-          " || echo "Python import test failed"
-        shell: bash
-
-      - name: Test JavaScript Library
-        run: |
-          echo "📦 Testing JavaScript library on ${{ matrix.os }} with Node.js ${{ matrix.node-version }}..."
-          cd javascript-library
-          node --version
-          npm --version
-          
-          if [ -f "package.json" ]; then
-            npm install || echo "NPM install failed"
-            npm test || echo "NPM test failed"
-          fi
-          
-          if [ -f "gbl.js" ]; then
-            node -e "
-            try {
-              // Test if the module can be loaded
-              console.log('Testing JavaScript module...');
-              console.log('✅ JavaScript module test passed');
-            } catch (e) {
-              console.log('❌ JavaScript module test failed:', e.message);
-            }
-            " || echo "JavaScript module test failed"
-          fi
-        shell: bash
-
-      - name: Cross-platform file handling test
-        run: |
-          echo "📁 Testing cross-platform file handling..."
-          
-          # Create test files with different line endings
-          echo -e "line1\nline2\nline3" > test_unix.txt
-          echo -e "line1\r\nline2\r\nline3" > test_windows.txt
-          
-          # Test file reading in different environments
-          python -c "
-          import os
-          files = ['test_unix.txt', 'test_windows.txt']
-          for f in files:
-              if os.path.exists(f):
-                  with open(f, 'r') as file:
-                      content = file.read()
-                      print(f'{f}: {len(content)} chars')
-          "
-          
-          # Cleanup
-          rm -f test_unix.txt test_windows.txt
-        shell: bash
-
-      - name: Memory and performance test
-        run: |
-          echo "⚡ Testing memory and performance..."
-          
-          # Test memory usage
-          python -c "
-          import sys
-          print(f'Python memory info available: {hasattr(sys, \"getsizeof\")}')
-          "
-          
-          # Test Java memory
-          java -Xms64m -Xmx128m -version || echo "Java memory test failed"
-          
-          # Test Node.js memory
-          node -e "
-          console.log('Node.js heap usage:', process.memoryUsage());
-          " || echo "Node.js memory test failed"
-
-      - name: Character encoding test
-        run: |
-          echo "🔤 Testing character encoding..."
-          
-          # Create test file with Unicode characters
-          python -c "
-          content = 'Hello 世界 🌍 café naïve résumé'
-          with open('test_unicode.txt', 'w', encoding='utf-8') as f:
-              f.write(content)
-          
-          with open('test_unicode.txt', 'r', encoding='utf-8') as f:
-              read_content = f.read()
-              assert content == read_content
-              print('✅ Unicode handling test passed')
-          "
-          
-          # Cleanup
-          rm -f test_unicode.txt
-
-      - name: Path handling test
-        run: |
-          echo "🛤️  Testing path handling..."
-          
-          # Test path separators
-          python -c "
-          import os
-          print(f'OS: {os.name}')
-          print(f'Path separator: {os.sep}')
-          print(f'Current directory: {os.getcwd()}')
-          
-          # Test path joining
-          path = os.path.join('dir1', 'dir2', 'file.txt')
-          print(f'Joined path: {path}')
-          "
-
-      - name: Generate compatibility report
-        run: |
-          echo "📊 Generating compatibility report..."
-          
-          cat > compatibility_report_${{ matrix.os }}_java${{ matrix.java-version }}_python${{ matrix.python-version }}_node${{ matrix.node-version }}.txt << EOF
-          Compatibility Test Report
-          ========================
-          
-          Environment:
-          - OS: ${{ matrix.os }}
-          - Java: ${{ matrix.java-version }}
-          - Python: ${{ matrix.python-version }}
-          - Node.js: ${{ matrix.node-version }}
-          - Runner: ${{ runner.name }}
-          
-          Test Results:
-          - CLI Tool: $(cd gbl-tool-cli && (./gradlew build > /dev/null 2>&1 && echo "✅ PASS" || echo "❌ FAIL"))
-          - Java Library: $(cd java-library && (./gradlew build > /dev/null 2>&1 && echo "✅ PASS" || echo "❌ FAIL"))
-          - Kotlin Library: $(cd kotlin-library && (./gradlew build > /dev/null 2>&1 && echo "✅ PASS" || echo "❌ FAIL"))
-          - Python Library: $(cd python-library && (python gbl.py > /dev/null 2>&1 && echo "✅ PASS" || echo "❌ FAIL"))
-          - JavaScript Library: ✅ PASS
-          
-          System Info:
-          - $(java -version 2>&1 | head -1)
-          - $(python --version)
-          - $(node --version)
-          
-          Generated: $(date)
-          EOF
-
-      - name: Upload compatibility report
-        uses: actions/upload-artifact@v4
-        with:
-          name: compatibility-report-${{ matrix.os }}-java${{ matrix.java-version }}-python${{ matrix.python-version }}-node${{ matrix.node-version }}
-          path: compatibility_report_*.txt
-          retention-days: 30
-
-  swift-compatibility:
-    strategy:
-      matrix:
-        os: [macos-latest, ubuntu-latest]
-        swift-version: ['5.7', '5.8', '5.9']
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Swift ${{ matrix.swift-version }}
-        uses: swift-actions/setup-swift@v1
-        with:
-          swift-version: ${{ matrix.swift-version }}
-
-      - name: Test Swift Library
-        run: |
-          echo "🍎 Testing Swift library on ${{ matrix.os }} with Swift ${{ matrix.swift-version }}..."
-          
-          if [ -d "swift-library" ]; then
-            cd swift-library
-          
-            # Test Swift package
-            swift --version
-            swift package resolve || echo "Swift package resolve failed"
-            swift build || echo "Swift build failed"
-            swift test || echo "Swift test failed"
-          
-            cd ..
-          else
-            echo "Swift library directory not found"
-          fi
-
-  integration-test:
-    needs: [matrix-test]
+  build-kotlin:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -331,124 +21,267 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Build Kotlin Library
+        run: |
+          cd kotlin-library
+          chmod +x gradlew
+          ./gradlew clean build jar --no-daemon
+
+      - name: Upload Kotlin Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: kotlin-library
+          path: kotlin-library/build/libs/*.jar
+          retention-days: 90
+
+  build-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Build CLI Tool
+        run: |
+          cd gbl-tool-cli
+          chmod +x gradlew
+          ./gradlew clean build shadowJar --no-daemon
+
+      - name: Upload CLI Tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: gbl-cli-tool
+          path: gbl-tool-cli/build/libs/*-all.jar
+          retention-days: 90
+
+  build-java:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Build Java Library
+        run: |
+          cd java-library
+          chmod +x gradlew
+          ./gradlew clean build jar --no-daemon
+
+      - name: Upload Java Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-library
+          path: java-library/build/libs/*.jar
+          retention-days: 90
+
+  build-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
+      - name: Package Python Library
+        run: |
+          cd python-library
+          python -m pip install --upgrade pip wheel setuptools
+          
+          # Create wheel if setup.py exists
+          if [ -f "setup.py" ]; then
+            python setup.py sdist bdist_wheel
+          else
+            # Create simple distribution
+            mkdir -p dist
+            cp gbl.py dist/
+            echo "GBL Python Library" > dist/README.txt
+            tar -czf dist/gbl-python-library.tar.gz gbl.py
+          fi
+
+      - name: Upload Python Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-library
+          path: python-library/dist/*
+          retention-days: 90
+
+  build-javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Download compatibility reports
-        uses: actions/download-artifact@v4
-        with:
-          pattern: compatibility-report-*
-          merge-multiple: true
-
-      - name: Aggregate compatibility results
+      - name: Package JavaScript Library
         run: |
-          echo "📊 Aggregating compatibility results..."
+          cd javascript-library
           
-          echo "# Compatibility Test Summary" > compatibility_summary.md
-          echo "" >> compatibility_summary.md
-          echo "Generated: $(date)" >> compatibility_summary.md
-          echo "" >> compatibility_summary.md
-          
-          echo "## Test Results by Platform" >> compatibility_summary.md
-          echo "" >> compatibility_summary.md
-          
-          for report in compatibility_report_*.txt; do
-            if [ -f "$report" ]; then
-              echo "### $(basename $report .txt)" >> compatibility_summary.md
-              echo "\`\`\`" >> compatibility_summary.md
-              cat "$report" >> compatibility_summary.md
-              echo "\`\`\`" >> compatibility_summary.md
-              echo "" >> compatibility_summary.md
-            fi
-          done
-          
-          # Count successes and failures
-          total_reports=$(ls compatibility_report_*.txt 2>/dev/null | wc -l)
-          echo "Total test configurations: $total_reports" >> compatibility_summary.md
-
-      - name: Integration test across languages
-        run: |
-          echo "🔗 Running cross-language integration tests..."
-          
-          # Build all components
-          make all || python3 build_artifacts.py
-          
-          # Test that all artifacts can be used together
-          if [ -d "artifacts" ]; then
-            echo "Testing artifact integration..."
-          
-            # Test CLI tool
-            if [ -f "artifacts/gbl-cli-"*.jar ]; then
-              java -jar artifacts/gbl-cli-*.jar --help || echo "CLI test failed"
-            fi
-          
-            # Count artifacts
-            artifact_count=$(ls artifacts/*.jar artifacts/*.zip artifacts/*.js artifacts/*.py 2>/dev/null | wc -l)
-            echo "Generated $artifact_count artifacts"
+          # Install dependencies if package.json exists
+          if [ -f "package.json" ]; then
+            npm install
+            npm run build || echo "No build script, continuing..."
+            npm pack
+          else
+            # Create simple distribution
+            mkdir -p dist
+            cp *.js dist/ 2>/dev/null || echo "No JS files found"
+            cp *.html dist/ 2>/dev/null || echo "No HTML files found"
+            cp README.md dist/ 2>/dev/null || echo "No README found"
+            tar -czf dist/gbl-javascript-library.tar.gz *.js *.html README.md 2>/dev/null || echo "Creating minimal archive"
           fi
 
-      - name: Performance benchmark
-        run: |
-          echo "⚡ Running performance benchmarks..."
-          
-          # Build time benchmark
-          echo "Build time benchmark:" > performance_report.txt
-          
-          for component in kotlin-library java-library gbl-tool-cli; do
-            if [ -d "$component" ]; then
-              echo "Benchmarking $component..." 
-              cd "$component"
-          
-              start_time=$(date +%s%N)
-              ./gradlew clean build > /dev/null 2>&1 || echo "Build failed"
-              end_time=$(date +%s%N)
-          
-              duration=$(( (end_time - start_time) / 1000000 ))
-              echo "$component: ${duration}ms" >> ../performance_report.txt
-          
-              cd ..
-            fi
-          done
-          
-          cat performance_report.txt
-
-      - name: Upload final results
+      - name: Upload JavaScript Library
         uses: actions/upload-artifact@v4
         with:
-          name: compatibility-final-results
+          name: javascript-library
           path: |
-            compatibility_summary.md
-            performance_report.txt
+            javascript-library/dist/*
+            javascript-library/*.tgz
           retention-days: 90
 
-  report:
-    needs: [matrix-test, swift-compatibility, integration-test]
+  build-swift:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v1
+        with:
+          swift-version: '5.9'
+
+      - name: Build Swift Library
+        run: |
+          cd swift-library
+          swift package clean
+          swift build -c release
+          
+          # Create archive
+          mkdir -p dist
+          cp -r Sources dist/
+          cp Package.swift dist/
+          cp README.md dist/ 2>/dev/null || echo "No README found"
+          tar -czf dist/gbl-swift-library.tar.gz -C dist .
+
+      - name: Upload Swift Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-library
+          path: swift-library/dist/*.tar.gz
+          retention-days: 90
+
+  create-release:
+    needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy and rename artifacts
+          find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library.jar \;
+          find artifacts -name "*-all.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.jar \;
+          find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library.jar \;
+          find artifacts -name "*.tar.gz" -path "*/python-library/*" -exec cp {} release-assets/gbl-python-library.tar.gz \;
+          find artifacts -name "*.tar.gz" -path "*/javascript-library/*" -exec cp {} release-assets/gbl-javascript-library.tar.gz \;
+          find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library.tar.gz \;
+          
+          # Create combined archive
+          tar -czf release-assets/gbl-ninja-complete-${GITHUB_REF_NAME}.tar.gz -C artifacts .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/*
+          body: |
+            # GBL-Ninja Release ${{ github.ref_name }}
+            
+            Multi-language toolkit for working with GBL (Gecko Bootloader) files.
+            
+            ## Downloads
+            
+            - **Kotlin Library**: `gbl-kotlin-library.jar`
+            - **Java Library**: `gbl-java-library.jar`
+            - **CLI Tool**: `gbl-cli-tool.jar`
+            - **Python Library**: `gbl-python-library.tar.gz`
+            - **JavaScript Library**: `gbl-javascript-library.tar.gz`
+            - **Swift Library**: `gbl-swift-library.tar.gz`
+            - **Complete Package**: `gbl-ninja-complete-${{ github.ref_name }}.tar.gz`
+            
+            ## Usage
+            
+            See individual library documentation in the respective directories.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  summary:
+    needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift]
     runs-on: ubuntu-latest
     if: always()
-
     steps:
-      - name: Generate final report
+      - name: Build Summary
         run: |
-          echo "📋 Compatibility Test Complete"
-          echo "============================="
-          echo ""
-          echo "Matrix tests: ${{ needs.matrix-test.result }}"
-          echo "Swift tests: ${{ needs.swift-compatibility.result }}"
-          echo "Integration tests: ${{ needs.integration-test.result }}"
-          echo ""
-          
-          if [ "${{ needs.matrix-test.result }}" == "success" ] && \
-             [ "${{ needs.integration-test.result }}" == "success" ]; then
-            echo "✅ All compatibility tests passed!"
-            exit 0
-          else
-            echo "❌ Some compatibility tests failed"
-            exit 1
-          fi
+          echo "## Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Kotlin Library | ${{ needs.build-kotlin.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Tool | ${{ needs.build-cli.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Java Library | ${{ needs.build-java.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Library | ${{ needs.build-python.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| JavaScript Library | ${{ needs.build-javascript.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Swift Library | ${{ needs.build-swift.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts are available for download for 90 days." >> $GITHUB_STEP_SUMMARY
