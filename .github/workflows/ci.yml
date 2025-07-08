@@ -328,7 +328,7 @@ jobs:
   create-release:
     needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') && always()
+    if: always()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -499,7 +499,7 @@ jobs:
           files: release-assets/*
           body_path: release-description.md
           draft: false
-          prerelease: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
