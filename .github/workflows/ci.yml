@@ -76,47 +76,15 @@ jobs:
         run: |
           cd cli-demo
           
-          echo "Checking available Gradle tasks..."
+          echo "Building CLI Tool..."
           if [ -f "gradlew" ]; then
             chmod +x gradlew
-            ./gradlew tasks --all | grep -i shadow || echo "No shadow tasks found"
-          
-            # Try different build strategies
-            if ./gradlew tasks --all | grep -q shadowJar; then
-              echo "Building with shadowJar..."
-              ./gradlew clean build shadowJar --no-daemon
-            elif ./gradlew tasks --all | grep -q fatJar; then
-              echo "Building with fatJar..."
-              ./gradlew clean build fatJar --no-daemon
-            elif ./gradlew tasks --all | grep -q jar; then
-              echo "Building with standard jar..."
-              ./gradlew clean build jar --no-daemon
-            else
-              echo "Building with basic gradle..."
-              ./gradlew clean build --no-daemon
-            fi
+            ./gradlew clean build jar --no-daemon
           elif [ -f "build.gradle" ]; then
-            echo "Using system gradle..."
-            gradle clean build --no-daemon
+            gradle clean build jar --no-daemon
           else
-            echo "No Gradle build found, creating CLI package from existing files"
-            mkdir -p build/libs
-          
-            # Package existing CLI files
-            if [ -f "gbl-ninja.jar" ]; then
-              cp gbl-ninja.jar build/libs/
-            fi
-          
-            # Create a basic CLI distribution
-            tar -czf build/libs/gbl-cli-tool.tar.gz \
-              *.sh *.bat *.jar README.md \
-              2>/dev/null || echo "Creating minimal CLI package"
-          
-            # Create a placeholder if nothing exists
-            if [ ! -f "build/libs/gbl-cli-tool.tar.gz" ]; then
-              echo "CLI Tool placeholder" > build/libs/gbl-cli-tool.txt
-              tar -czf build/libs/gbl-cli-tool.tar.gz build/libs/gbl-cli-tool.txt
-            fi
+            echo "No Gradle build found, skipping CLI build"
+            exit 1
           fi
           
           echo "Build completed. Contents of build/libs:"
@@ -127,24 +95,15 @@ jobs:
         if: failure()
         run: |
           cd cli-demo
-          echo "CLI build failed, creating fallback package"
-          mkdir -p build/libs
-          
-          # Try to package whatever files exist
-          if ls *.sh *.bat *.jar README.md 2>/dev/null; then
-            tar -czf build/libs/gbl-cli-tool.tar.gz *.sh *.bat *.jar README.md 2>/dev/null
-          else
-            echo "CLI Tool fallback - build failed" > build/libs/gbl-cli-tool.txt
-            tar -czf build/libs/gbl-cli-tool.tar.gz build/libs/gbl-cli-tool.txt
-          fi
+          echo "CLI build failed, skipping artifact creation"
+          exit 1
 
       - name: Upload CLI Tool
         uses: actions/upload-artifact@v4
         with:
           name: gbl-cli-tool
           path: |
-            cli-demo/build/libs/*
-            cli-demo/*.jar
+            cli-demo/build/libs/*.jar
             cli-demo/*.sh
             cli-demo/*.bat
           retention-days: 90
@@ -179,9 +138,8 @@ jobs:
           elif [ -f "build.gradle" ]; then
             gradle clean build jar --no-daemon
           else
-            echo "No Gradle build found, creating placeholder"
-            mkdir -p build/libs
-            echo "Java library placeholder" > build/libs/java-library.jar
+            echo "No Gradle build found, skipping Java build"
+            exit 1
           fi
         continue-on-error: true
 
@@ -189,9 +147,8 @@ jobs:
         if: failure()
         run: |
           cd java-library
-          echo "Java build failed, creating placeholder"
-          mkdir -p build/libs
-          echo "Java library placeholder - build failed" > build/libs/java-library.jar
+          echo "Java build failed, skipping artifact creation"
+          exit 1
 
       - name: Upload Java Library
         uses: actions/upload-artifact@v4
@@ -221,10 +178,9 @@ jobs:
           if [ -f "setup.py" ]; then
             python setup.py sdist bdist_wheel
           else
-            # Create simple distribution
+            # Create simple distribution without README
             mkdir -p dist
             cp gbl.py dist/
-            echo "GBL Python Library" > dist/README.txt
             tar -czf dist/gbl-python-library.tar.gz gbl.py
           fi
 
@@ -257,12 +213,11 @@ jobs:
             npm run build || echo "No build script, continuing..."
             npm pack
           else
-            # Create simple distribution
+            # Create simple distribution without README
             mkdir -p dist
             cp *.js dist/ 2>/dev/null || echo "No JS files found"
             cp *.html dist/ 2>/dev/null || echo "No HTML files found"
-            cp README.md dist/ 2>/dev/null || echo "No README found"
-            tar -czf dist/gbl-javascript-library.tar.gz *.js *.html README.md 2>/dev/null || echo "Creating minimal archive"
+            tar -czf dist/gbl-javascript-library.tar.gz *.js *.html 2>/dev/null || echo "Creating minimal archive"
           fi
 
       - name: Upload JavaScript Library
@@ -338,11 +293,10 @@ jobs:
             echo "Swift build failed, but sources are available" > .build/release/build.log
           fi
           
-          # Create distribution archive
+          # Create distribution archive without README
           mkdir -p dist
           cp -r Sources dist/ 2>/dev/null || echo "No Sources directory"
           cp Package.swift dist/ 2>/dev/null || echo "No Package.swift"
-          cp README.md dist/ 2>/dev/null || echo "No README found"
           
           # Add any build artifacts if they exist
           if [ -d ".build" ]; then
@@ -360,15 +314,8 @@ jobs:
         if: failure()
         run: |
           cd swift-library
-          echo "Swift build completely failed, creating minimal package"
-          mkdir -p dist
-          echo "Swift library placeholder - build failed" > dist/build-failed.txt
-          cp README.md dist/ 2>/dev/null || echo "Swift Library - Build Failed" > dist/README.txt
-          if [ -d "Sources" ]; then
-            cp -r Sources dist/
-          fi
-          tar -czf dist/gbl-swift-library.tar.gz -C dist .
-          echo "Fallback Swift package created"
+          echo "Swift build completely failed, skipping artifact creation"
+          exit 1
 
       - name: Upload Swift Library
         uses: actions/upload-artifact@v4
@@ -451,20 +398,21 @@ jobs:
           
           # Kotlin Library
           if [ "${{ needs.build-kotlin.result }}" = "success" ] && find artifacts -name "*.jar" -path "*/kotlin-library/*" | head -1 | xargs test -f; then
-            find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library.jar \;
+            find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library-${{ github.ref_name }}.jar \;
             echo "- ✅ **Kotlin Library**: Built successfully" >> release-description.md
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Kotlin Library**: \`gbl-kotlin-library.jar\`\n"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Kotlin Library**: \`gbl-kotlin-library-${{ github.ref_name }}.jar\`\n"
           else
             echo "- ❌ **Kotlin Library**: Build failed" >> release-description.md
           fi
           
           # CLI Tool
           if [ "${{ needs.build-cli.result }}" = "success" ]; then
-            find artifacts -name "*.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.jar \; 2>/dev/null || true
-            find artifacts -name "*.tar.gz" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool.tar.gz \; 2>/dev/null || true
-            if [ -f "release-assets/gbl-cli-tool.jar" ] || [ -f "release-assets/gbl-cli-tool.tar.gz" ]; then
+            find artifacts -name "*.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool-${{ github.ref_name }}.jar \; 2>/dev/null || true
+            find artifacts -name "*.sh" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/ \; 2>/dev/null || true
+            find artifacts -name "*.bat" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/ \; 2>/dev/null || true
+            if [ -f "release-assets/gbl-cli-tool-${{ github.ref_name }}.jar" ]; then
               echo "- ✅ **CLI Tool**: Built successfully" >> release-description.md
-              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **CLI Tool**: \`gbl-cli-tool.jar\` / \`gbl-cli-tool.tar.gz\`\n"
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **CLI Tool**: \`gbl-cli-tool-${{ github.ref_name }}.jar\` + scripts\n"
             else
               echo "- ⚠️ **CLI Tool**: Build completed but no artifacts found" >> release-description.md
             fi
@@ -474,19 +422,20 @@ jobs:
           
           # Java Library
           if [ "${{ needs.build-java.result }}" = "success" ] && find artifacts -name "*.jar" -path "*/java-library/*" | head -1 | xargs test -f; then
-            find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library.jar \;
+            find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library-${{ github.ref_name }}.jar \;
             echo "- ✅ **Java Library**: Built successfully" >> release-description.md
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Java Library**: \`gbl-java-library.jar\`\n"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Java Library**: \`gbl-java-library-${{ github.ref_name }}.jar\`\n"
           else
             echo "- ❌ **Java Library**: Build failed" >> release-description.md
           fi
           
           # Python Library
           if [ "${{ needs.build-python.result }}" = "success" ]; then
-            find artifacts -name "*" -path "*/python-library/*" -exec cp {} release-assets/ \; 2>/dev/null || true
-            if [ -n "$(find release-assets -name "*python*" 2>/dev/null)" ]; then
+            find artifacts -path "*/python-library/*" -name "*.tar.gz" -exec cp {} release-assets/gbl-python-library-${{ github.ref_name }}.tar.gz \; 2>/dev/null || true
+            find artifacts -path "*/python-library/*" -name "*.whl" -exec cp {} release-assets/ \; 2>/dev/null || true
+            if [ -f "release-assets/gbl-python-library-${{ github.ref_name }}.tar.gz" ] || [ -n "$(find release-assets -name "*.whl" 2>/dev/null)" ]; then
               echo "- ✅ **Python Library**: Built successfully" >> release-description.md
-              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Python Library**: \`gbl-python-library.*\`\n"
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Python Library**: \`gbl-python-library-${{ github.ref_name }}.tar.gz\`\n"
             else
               echo "- ⚠️ **Python Library**: Build completed but no artifacts found" >> release-description.md
             fi
@@ -496,10 +445,11 @@ jobs:
           
           # JavaScript Library
           if [ "${{ needs.build-javascript.result }}" = "success" ]; then
-            find artifacts -name "*" -path "*/javascript-library/*" -exec cp {} release-assets/ \; 2>/dev/null || true
-            if [ -n "$(find release-assets -name "*javascript*" -o -name "*.tgz" 2>/dev/null)" ]; then
+            find artifacts -path "*/javascript-library/*" -name "*.tar.gz" -exec cp {} release-assets/gbl-javascript-library-${{ github.ref_name }}.tar.gz \; 2>/dev/null || true
+            find artifacts -path "*/javascript-library/*" -name "*.tgz" -exec cp {} release-assets/ \; 2>/dev/null || true
+            if [ -f "release-assets/gbl-javascript-library-${{ github.ref_name }}.tar.gz" ] || [ -n "$(find release-assets -name "*.tgz" 2>/dev/null)" ]; then
               echo "- ✅ **JavaScript Library**: Built successfully" >> release-description.md
-              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **JavaScript Library**: \`gbl-javascript-library.*\`\n"
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **JavaScript Library**: \`gbl-javascript-library-${{ github.ref_name }}.tar.gz\`\n"
             else
               echo "- ⚠️ **JavaScript Library**: Build completed but no artifacts found" >> release-description.md
             fi
@@ -509,16 +459,16 @@ jobs:
           
           # Swift Library
           if [ "${{ needs.build-swift.result }}" = "success" ] && find artifacts -name "*.tar.gz" -path "*/swift-library/*" | head -1 | xargs test -f; then
-            find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library.tar.gz \;
+            find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library-${{ github.ref_name }}.tar.gz \;
             echo "- ✅ **Swift Library**: Built successfully" >> release-description.md
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Swift Library**: \`gbl-swift-library.tar.gz\`\n"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Swift Library**: \`gbl-swift-library-${{ github.ref_name }}.tar.gz\`\n"
           else
             echo "- ❌ **Swift Library**: Build failed" >> release-description.md
           fi
           
           # Create combined archive if we have any artifacts
           if [ -n "$(find release-assets -type f 2>/dev/null)" ]; then
-            tar -czf release-assets/gbl-ninja-complete-${{ github.ref_name }}.tar.gz -C artifacts . 2>/dev/null || echo "No artifacts to combine"
+            tar -czf release-assets/gbl-ninja-complete-${{ github.ref_name }}.tar.gz -C release-assets .
             AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Complete Package**: \`gbl-ninja-complete-${{ github.ref_name }}.tar.gz\`\n"
           fi
           
@@ -537,7 +487,7 @@ jobs:
           echo "" >> release-description.md
           echo "## Usage" >> release-description.md
           echo "" >> release-description.md
-          echo "See individual library documentation in the respective directories." >> release-description.md
+          echo "Download the appropriate library for your platform and integrate it into your project." >> release-description.md
           
           # Count available files
           ARTIFACT_COUNT=$(find release-assets -type f 2>/dev/null | wc -l)
@@ -591,3 +541,6 @@ jobs:
           else
             echo "Artifacts are available for download for 90 days." >> $GITHUB_STEP_SUMMARY
           fi
+
+
+

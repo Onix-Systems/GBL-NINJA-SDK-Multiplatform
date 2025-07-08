@@ -1,5 +1,8 @@
 # GBL-Ninja
 
+[![Main Site](https://img.shields.io/badge/Website-Gecko%20Bootloader%20Parser%20SDK-blue?logo=web)](https://onix-systems-android-gbl-ninja.dev.onix.team/)
+[![Constructor](https://img.shields.io/badge/Tool-GBL%20File%20Parser%20%26%20Builder-green?logo=tools)](https://onix-systems-android-gbl-ninja.dev.onix.team/constructor/)
+
 **GBL-Ninja** is a comprehensive toolkit for working with GBL (Gecko Bootloader) files.
 
 ## Project Structure
