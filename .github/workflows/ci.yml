@@ -468,7 +468,8 @@ jobs:
           
           # Create combined archive if we have any artifacts
           if [ -n "$(find release-assets -type f 2>/dev/null)" ]; then
-            tar -czf release-assets/gbl-ninja-complete-${{ github.ref_name }}.tar.gz -C release-assets .
+            tar -czf gbl-ninja-complete-${{ github.ref_name }}.tar.gz -C release-assets .
+            mv gbl-ninja-complete-${{ github.ref_name }}.tar.gz release-assets/
             AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Complete Package**: \`gbl-ninja-complete-${{ github.ref_name }}.tar.gz\`\n"
           fi
           
