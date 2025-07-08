@@ -502,6 +502,7 @@ jobs:
           draft: false
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           fail_on_unmatched_files: false
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.sha) }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
