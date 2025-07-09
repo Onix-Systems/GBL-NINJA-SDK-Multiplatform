@@ -158,77 +158,7 @@ jobs:
           retention-days: 90
         continue-on-error: true
 
-  build-python:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Package Python Library
-        run: |
-          cd python-library
-          python -m pip install --upgrade pip wheel setuptools
-          
-          # Create wheel if setup.py exists
-          if [ -f "setup.py" ]; then
-            python setup.py sdist bdist_wheel
-          else
-            # Create simple distribution without README
-            mkdir -p dist
-            cp gbl.py dist/
-            tar -czf dist/gbl-python-library.tar.gz gbl.py
-          fi
-
-      - name: Upload Python Library
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-library
-          path: python-library/dist/*
-          retention-days: 90
-        continue-on-error: true
-
-  build-javascript:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Package JavaScript Library
-        run: |
-          cd javascript-library
-          
-          # Install dependencies if package.json exists
-          if [ -f "package.json" ]; then
-            npm install
-            npm run build || echo "No build script, continuing..."
-            npm pack
-          else
-            # Create simple distribution without README
-            mkdir -p dist
-            cp *.js dist/ 2>/dev/null || echo "No JS files found"
-            cp *.html dist/ 2>/dev/null || echo "No HTML files found"
-            tar -czf dist/gbl-javascript-library.tar.gz *.js *.html 2>/dev/null || echo "Creating minimal archive"
-          fi
-
-      - name: Upload JavaScript Library
-        uses: actions/upload-artifact@v4
-        with:
-          name: javascript-library
-          path: |
-            javascript-library/dist/*
-            javascript-library/*.tgz
-          retention-days: 90
-        continue-on-error: true
 
   build-swift:
     runs-on: macos-latest
@@ -326,7 +256,7 @@ jobs:
         continue-on-error: true
 
   create-release:
-    needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift]
+    needs: [build-kotlin, build-cli, build-java, build-swift]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -357,21 +287,6 @@ jobs:
           path: artifacts/java-library
         continue-on-error: true
 
-      - name: Download Python artifacts
-        if: needs.build-python.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: python-library
-          path: artifacts/python-library
-        continue-on-error: true
-
-      - name: Download JavaScript artifacts
-        if: needs.build-javascript.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: javascript-library
-          path: artifacts/javascript-library
-        continue-on-error: true
 
       - name: Download Swift artifacts
         if: needs.build-swift.result == 'success'
@@ -429,33 +344,6 @@ jobs:
             echo "- ❌ **Java Library**: Build failed" >> release-description.md
           fi
           
-          # Python Library
-          if [ "${{ needs.build-python.result }}" = "success" ]; then
-            find artifacts -path "*/python-library/*" -name "*.tar.gz" -exec cp {} release-assets/gbl-python-library-${{ github.ref_name }}.tar.gz \; 2>/dev/null || true
-            find artifacts -path "*/python-library/*" -name "*.whl" -exec cp {} release-assets/ \; 2>/dev/null || true
-            if [ -f "release-assets/gbl-python-library-${{ github.ref_name }}.tar.gz" ] || [ -n "$(find release-assets -name "*.whl" 2>/dev/null)" ]; then
-              echo "- ✅ **Python Library**: Built successfully" >> release-description.md
-              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Python Library**: \`gbl-python-library-${{ github.ref_name }}.tar.gz\`\n"
-            else
-              echo "- ⚠️ **Python Library**: Build completed but no artifacts found" >> release-description.md
-            fi
-          else
-            echo "- ❌ **Python Library**: Build failed" >> release-description.md
-          fi
-          
-          # JavaScript Library
-          if [ "${{ needs.build-javascript.result }}" = "success" ]; then
-            find artifacts -path "*/javascript-library/*" -name "*.tar.gz" -exec cp {} release-assets/gbl-javascript-library-${{ github.ref_name }}.tar.gz \; 2>/dev/null || true
-            find artifacts -path "*/javascript-library/*" -name "*.tgz" -exec cp {} release-assets/ \; 2>/dev/null || true
-            if [ -f "release-assets/gbl-javascript-library-${{ github.ref_name }}.tar.gz" ] || [ -n "$(find release-assets -name "*.tgz" 2>/dev/null)" ]; then
-              echo "- ✅ **JavaScript Library**: Built successfully" >> release-description.md
-              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **JavaScript Library**: \`gbl-javascript-library-${{ github.ref_name }}.tar.gz\`\n"
-            else
-              echo "- ⚠️ **JavaScript Library**: Build completed but no artifacts found" >> release-description.md
-            fi
-          else
-            echo "- ❌ **JavaScript Library**: Build failed" >> release-description.md
-          fi
           
           # Swift Library
           if [ "${{ needs.build-swift.result }}" = "success" ] && find artifacts -name "*.tar.gz" -path "*/swift-library/*" | head -1 | xargs test -f; then
@@ -514,7 +402,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   summary:
-    needs: [build-kotlin, build-cli, build-java, build-python, build-javascript, build-swift, create-release]
+    needs: [build-kotlin, build-cli, build-java, build-swift, create-release]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -527,9 +415,9 @@ jobs:
           echo "| Kotlin Library | ${{ needs.build-kotlin.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| CLI Tool | ${{ needs.build-cli.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Java Library | ${{ needs.build-java.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python Library | ${{ needs.build-python.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| JavaScript Library | ${{ needs.build-javascript.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Swift Library | ${{ needs.build-swift.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Library | 📦 Available on PyPI |" >> $GITHUB_STEP_SUMMARY
+          echo "| JavaScript Library | 📦 Available on npm |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Release status
@@ -542,11 +430,10 @@ jobs:
             [ "${{ needs.build-kotlin.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             [ "${{ needs.build-cli.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             [ "${{ needs.build-java.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-            [ "${{ needs.build-python.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-            [ "${{ needs.build-javascript.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             [ "${{ needs.build-swift.result }}" = "success" ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
           
-            echo "**Release Summary**: $SUCCESS_COUNT out of 6 components built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "**Release Summary**: $SUCCESS_COUNT out of 4 components built successfully" >> $GITHUB_STEP_SUMMARY
+            echo "**Package Managers**: Python and JavaScript libraries available via PyPI and npm" >> $GITHUB_STEP_SUMMARY
           else
             echo "Artifacts are available for download for 90 days." >> $GITHUB_STEP_SUMMARY
           fi
