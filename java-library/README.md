@@ -2,6 +2,20 @@
 
 This is a Java library for parsing and creating GBL files.
 
+## Installation
+
+**Gradle**:
+```gradle
+dependencies {
+    implementation files('libs/gbl-ninja-java.jar')
+}
+```
+
+**Steps:**
+1. Download the latest `gbl-ninja-java.jar` from the releases
+2. Place it in your project's `libs/` directory
+3. Add the dependency to your `build.gradle`
+
 ## Features
 
 *   **Parse GBL files:** Read and parse GBL files into a list of tag objects.

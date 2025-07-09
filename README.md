@@ -24,12 +24,18 @@ Full-featured implementation with advanced container management and JSON seriali
 
 **Gradle (Kotlin DSL)**:
 ```kotlin
-repositories {
-    maven("https://jitpack.io")
-}
-
 dependencies {
-    implementation("com.github.VladimirOnix:gbl-ninja:v3")
+    implementation(files("libs/gbl-ninja-kotlin.jar"))
+}
+```
+
+### Java Library
+Java port of the Kotlin library with identical functionality.
+
+**Gradle**:
+```gradle
+dependencies {
+    implementation files('libs/gbl-ninja-java.jar')
 }
 ```
 
@@ -37,14 +43,15 @@ dependencies {
 Python port of the Kotlin library with identical functionality.
 
 ```bash
-pip install gbl-ninja-python
+pip install gbl-ninja==1.0.0
 ```
 
 ### JavaScript Library
 Browser and Node.js compatible implementation with interactive web interface.
 
-```html
-<script src="gbl-library.js"></script>
+**Node.js:**
+```bash
+npm install gbl-ninja
 ```
 
 ### Swift Library
@@ -81,6 +88,30 @@ val builder = Gbl.GblBuilder.create()
     .prog(flashStartAddress = 0x1000U, data = firmwareData)
 
 val gblBytes = builder.buildToByteArray()
+```
+
+### Java Example
+
+```java
+import com.gblninja.Gbl;
+import com.gblninja.results.ParseResult;
+
+// Parse existing GBL file
+Gbl gblParser = new Gbl();
+ParseResult result = gblParser.parseByteArray(gblFileBytes);
+
+if (result instanceof ParseResult.Success) {
+    System.out.println("Parsed " + ((ParseResult.Success) result).getResultList().size() + " tags");
+} else {
+    System.out.println("Parse error: " + ((ParseResult.Fatal) result).getError());
+}
+
+// Create new GBL file
+Gbl.GblBuilder builder = Gbl.GblBuilder.create();
+builder.application(32, 0x10000, 0, (byte) 54);
+builder.prog(0x1000, firmwareData);
+
+byte[] gblBytes = builder.buildToByteArray();
 ```
 
 ### Python Example
@@ -151,6 +182,7 @@ let newFile = builder.buildToByteArray()
 ## Documentation
 
 - **[Kotlin Library Documentation](kotlin-library/README.md)** - Original Kotlin library
+- **[Java Library Documentation](java-library/README.md)** - Java implementation
 - **[Python Library Documentation](python-library/README.md)** - Python implementation
 - **[JavaScript Library Documentation](javascript-library/README.md)** - JavaScript implementation with web interface
 - **[CLI Tool Documentation](gbl-tool-cli/README.md)** - Command-line interface

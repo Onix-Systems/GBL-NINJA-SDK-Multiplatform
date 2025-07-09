@@ -18,14 +18,15 @@ Kotlin library for parsing and creating files in the GBL (Gecko Bootloader) form
 
 **Gradle (Kotlin DSL)**:
 ```kotlin
-repositories {
-    maven("https://jitpack.io")
-}
-
 dependencies {
-    implementation("com.github.VladimirOnix:gbl-ninja:v3")
+    implementation(files("libs/gbl-ninja-kotlin.jar"))
 }
 ```
+
+**Steps:**
+1. Download the latest `gbl-ninja-kotlin.jar` from the releases
+2. Place it in your project's `libs/` directory
+3. Add the dependency to your `build.gradle.kts`
 
 ## Quick Start
 

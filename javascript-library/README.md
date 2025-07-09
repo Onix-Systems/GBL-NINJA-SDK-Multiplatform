@@ -7,19 +7,22 @@ JavaScript implementation of the GBL (Gecko Bootloader) file parser and builder.
 **CDN:**
 ```html
 <!-- jsDelivr CDN -->
-<script src="https://cdn.jsdelivr.net/gh/VladimirOnix/gbl-ninja@main/javascript-library/gbl-library.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/Onix-Systems/GBL-NINJA-SDK-Multiplatform@main/javascript-library/gbl.js"></script>
 ```
 
 **Local:**
 ```html
-<script src="gbl-library.js"></script>
+<script src="gbl.js"></script>
 ```
 
 **Node.js:**
+```bash
+npm install gbl-ninja
+```
+
 ```javascript
 const fs = require('fs');
-// npm install gbl-ninja
-// const { Gbl } = require('gbl-ninja');
+const { Gbl } = require('gbl-ninja');
 ```
 
 ## Quick Start

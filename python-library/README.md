@@ -2,6 +2,12 @@
 
 This is a Python library for parsing and creating GBL files.
 
+## Installation
+
+```bash
+pip install gbl-ninja==1.0.0
+```
+
 ## Features
 
 *   **Parse GBL files:** Read and parse GBL files into a list of tag objects.
@@ -13,7 +19,7 @@ This is a Python library for parsing and creating GBL files.
 ### Parsing a GBL File
 
 ```python
-from gbl import Gbl, ParseResultSuccess, ParseResultFatal
+from gblninja import Gbl, ParseResultSuccess, ParseResultFatal
 
 gbl = Gbl()
 
@@ -33,7 +39,7 @@ elif isinstance(result, ParseResultFatal):
 ### Creating a GBL File
 
 ```python
-from gbl import Gbl
+from gblninja import Gbl
 
 builder = Gbl.GblBuilder.create()
 builder.application()
