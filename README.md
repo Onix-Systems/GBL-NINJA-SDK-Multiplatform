@@ -58,7 +58,7 @@ npm install gbl-ninja
 Swift port with basic support for parsing, creating, and modifying GBL files. SwiftPM-compatible.
 
 ```swift
-.package(url: "https://github.com/VladimirOnix/gbl-ninja", branch: "main")
+.package(url: "https://github.com/Onix-Systems/GBL-NINJA-SDK-Multiplatform", branch: "main")
 ```
 
 ## Quick Start

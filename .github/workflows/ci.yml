@@ -485,6 +485,13 @@ jobs:
             echo "⚠️ No artifacts were successfully built for this release." >> release-description.md
           fi
           
+          # Add package manager links
+          echo "" >> release-description.md
+          echo "## Package Manager Links" >> release-description.md
+          echo "" >> release-description.md
+          echo "- **npm (JavaScript)**: [gbl-ninja](https://www.npmjs.com/package/gbl-ninja)" >> release-description.md
+          echo "- **PyPI (Python)**: [gbl-ninja](https://pypi.org/project/gbl-ninja/)" >> release-description.md
+          
           echo "" >> release-description.md
           echo "## Usage" >> release-description.md
           echo "" >> release-description.md
