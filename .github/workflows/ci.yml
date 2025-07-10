@@ -258,7 +258,7 @@ jobs:
   create-release:
     needs: [build-kotlin, build-cli, build-java, build-swift]
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -301,7 +301,12 @@ jobs:
           mkdir -p release-assets
           
           # Initialize release description
-          echo "# GBL-Ninja Release ${{ github.ref_name }}" > release-description.md
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RELEASE_VERSION="${{ github.ref_name }}"
+          else
+            RELEASE_VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+          fi
+          echo "# GBL-Ninja Release $RELEASE_VERSION" > release-description.md
           echo "" >> release-description.md
           echo "Multi-language toolkit for working with GBL (Gecko Bootloader) files." >> release-description.md
           echo "" >> release-description.md
@@ -313,21 +318,21 @@ jobs:
           
           # Kotlin Library
           if [ "${{ needs.build-kotlin.result }}" = "success" ] && find artifacts -name "*.jar" -path "*/kotlin-library/*" | head -1 | xargs test -f; then
-            find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library-${{ github.ref_name }}.jar \;
+            find artifacts -name "*.jar" -path "*/kotlin-library/*" -exec cp {} release-assets/gbl-kotlin-library-$RELEASE_VERSION.jar \;
             echo "- ✅ **Kotlin Library**: Built successfully" >> release-description.md
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Kotlin Library**: \`gbl-kotlin-library-${{ github.ref_name }}.jar\`\n"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Kotlin Library**: \`gbl-kotlin-library-$RELEASE_VERSION.jar\`\n"
           else
             echo "- ❌ **Kotlin Library**: Build failed" >> release-description.md
           fi
           
           # CLI Tool
           if [ "${{ needs.build-cli.result }}" = "success" ]; then
-            find artifacts -name "*.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool-${{ github.ref_name }}.jar \; 2>/dev/null || true
+            find artifacts -name "*.jar" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/gbl-cli-tool-$RELEASE_VERSION.jar \; 2>/dev/null || true
             find artifacts -name "*.sh" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/ \; 2>/dev/null || true
             find artifacts -name "*.bat" -path "*/gbl-cli-tool/*" -exec cp {} release-assets/ \; 2>/dev/null || true
-            if [ -f "release-assets/gbl-cli-tool-${{ github.ref_name }}.jar" ]; then
+            if [ -f "release-assets/gbl-cli-tool-$RELEASE_VERSION.jar" ]; then
               echo "- ✅ **CLI Tool**: Built successfully" >> release-description.md
-              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **CLI Tool**: \`gbl-cli-tool-${{ github.ref_name }}.jar\` + scripts\n"
+              AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **CLI Tool**: \`gbl-cli-tool-$RELEASE_VERSION.jar\` + scripts\n"
             else
               echo "- ⚠️ **CLI Tool**: Build completed but no artifacts found" >> release-description.md
             fi
@@ -337,9 +342,9 @@ jobs:
           
           # Java Library
           if [ "${{ needs.build-java.result }}" = "success" ] && find artifacts -name "*.jar" -path "*/java-library/*" | head -1 | xargs test -f; then
-            find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library-${{ github.ref_name }}.jar \;
+            find artifacts -name "*.jar" -path "*/java-library/*" -exec cp {} release-assets/gbl-java-library-$RELEASE_VERSION.jar \;
             echo "- ✅ **Java Library**: Built successfully" >> release-description.md
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Java Library**: \`gbl-java-library-${{ github.ref_name }}.jar\`\n"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Java Library**: \`gbl-java-library-$RELEASE_VERSION.jar\`\n"
           else
             echo "- ❌ **Java Library**: Build failed" >> release-description.md
           fi
@@ -347,18 +352,18 @@ jobs:
           
           # Swift Library
           if [ "${{ needs.build-swift.result }}" = "success" ] && find artifacts -name "*.tar.gz" -path "*/swift-library/*" | head -1 | xargs test -f; then
-            find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library-${{ github.ref_name }}.tar.gz \;
+            find artifacts -name "*.tar.gz" -path "*/swift-library/*" -exec cp {} release-assets/gbl-swift-library-$RELEASE_VERSION.tar.gz \;
             echo "- ✅ **Swift Library**: Built successfully" >> release-description.md
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Swift Library**: \`gbl-swift-library-${{ github.ref_name }}.tar.gz\`\n"
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Swift Library**: \`gbl-swift-library-$RELEASE_VERSION.tar.gz\`\n"
           else
             echo "- ❌ **Swift Library**: Build failed" >> release-description.md
           fi
           
           # Create combined archive if we have any artifacts
           if [ -n "$(find release-assets -type f 2>/dev/null)" ]; then
-            tar -czf gbl-ninja-complete-${{ github.ref_name }}.tar.gz -C release-assets .
-            mv gbl-ninja-complete-${{ github.ref_name }}.tar.gz release-assets/
-            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Complete Package**: \`gbl-ninja-complete-${{ github.ref_name }}.tar.gz\`\n"
+            tar -czf gbl-ninja-complete-$RELEASE_VERSION.tar.gz -C release-assets .
+            mv gbl-ninja-complete-$RELEASE_VERSION.tar.gz release-assets/
+            AVAILABLE_DOWNLOADS="${AVAILABLE_DOWNLOADS}- **Complete Package**: \`gbl-ninja-complete-$RELEASE_VERSION.tar.gz\`\n"
           fi
           
           # Add downloads section
@@ -388,6 +393,9 @@ jobs:
           # Count available files
           ARTIFACT_COUNT=$(find release-assets -type f 2>/dev/null | wc -l)
           echo "Found $ARTIFACT_COUNT release artifacts"
+          
+          # Export release version for later use
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -397,7 +405,7 @@ jobs:
           draft: false
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           fail_on_unmatched_files: false
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('dev-{0}', github.sha) }}
+          tag_name: ${{ env.RELEASE_VERSION }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
